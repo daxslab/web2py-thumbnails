@@ -39,7 +39,6 @@ class thumbnails():
             lambda queryset,fields: self._after_update(table_field, fields, queryset, size))
         self.db[table_field._tablename]._before_delete.append(
             lambda queryset: self._before_delete(table_field, queryset))
-
         self.db[table_field._tablename][table_field.name+'_thumbnail'] = Field.Virtual(
             lambda row: self._get_thumbnail(table_field, row))
         
@@ -66,7 +65,11 @@ class thumbnails():
 
     def _get_thumbnail(self, table_field, row):
         thumb = self.db((self.db.plugin_thumbnails.row_id == row[table_field._tablename].id) & (self.db.plugin_thumbnails.table_name == table_field._tablename) & (self.db.plugin_thumbnails.field_name == table_field.name)).select().first()
-        return thumb.image_thumbnail
+        if thumb is not None:
+            thumb_file = thumb.image_thumbnail
+        else:
+            thumb_file = row[table_field._tablename].image
+        return thumb_file
 
     def make_thumbnail(self, table_field, row_id, size=(175, 175)):
         table = self.db[table_field._tablename]
@@ -83,7 +86,7 @@ class thumbnails():
             if len(img) > 0:
                 img[0].update_record(image_thumbnail=stream)
             else:
-                self.db.plugin_thumbnails.insert(row_id=row_id,table_name=table._tablename,field_name=table_field.name,image_thumbnail=stream)
+                self.db.plugin_thumbnails.insert(row_id=row_id,table_name=table._tablename, field_name=table_field.name,image_thumbnail=stream)
 
             os.remove(os.path.join(current.request.folder, 'uploads', thumbnail))
             self.db.commit()
@@ -95,4 +98,3 @@ class thumbnails():
             os.remove(os.path.join(current.request.folder, 'uploads', thumbnail))
         except:
             pass
-
