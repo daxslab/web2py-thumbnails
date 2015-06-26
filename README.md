@@ -22,13 +22,13 @@ db = DAL()
 db.define_table('mytable',Field('myfield','string'),
                           Field('img','upload'))
 
-from plugin_thumbnails.thumbnails import thumbnails       # imports thumbnails plugin
-thumb = thumbnails(db)                                    # instantiate plugin and crete needed table
-thumb.create(db.mytable.img)                              # create thumbnails for mytable img field
+from plugin_thumbnails.thumbnails import thumbnails          # imports thumbnails plugin
+thumb = thumbnails(db, autodelete=True)                      # instantiate plugin and crete thumbnails table
+thumb.create(db.mytable.img, (150, 150), use_imageops=True)  # create thumbnails for mytable img field
 
-db.mytable.insert(myfield='Char',img=image)               # automatically create thumbnail for img field
-db(db.mytable.id).update(img=new_image)                   # automatically update thumbnail
-thumbnail = db(db.mytable).select().first().img_thumbnail # select thumbnail
-db(db.mytable).delete()                                   # automatically delete thumbnail
+db.mytable.insert(myfield='Char',img=image)                  # automatically create thumbnail for img field
+db(db.mytable.id).update(img=new_image)                      # automatically update thumbnail
+thumbnail = db(db.mytable).select().first().img_thumbnail    # select thumbnail
+db(db.mytable).delete()                                      # automatically delete thumbnail
 
 ```
