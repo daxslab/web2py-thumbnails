@@ -27,8 +27,8 @@ thumb = thumbnails(db, autodelete=True)                      # instantiate plugi
 thumb.create(db.mytable.img, (150, 150), use_imageops=True)  # create thumbnails for mytable img field
 
 db.mytable.insert(myfield='Char',img=image)                  # automatically create thumbnail for img field
-db(db.mytable.id).update(img=new_image)                      # automatically update thumbnail
+db(db.mytable.id==1).update(img=new_image)                   # automatically update thumbnail
 thumbnail = db(db.mytable).select().first().img_thumbnail    # select thumbnail
-db(db.mytable).delete()                                      # automatically delete thumbnail
+db(db.mytable.id==1).delete()                                # automatically delete thumbnail
 
 ```
