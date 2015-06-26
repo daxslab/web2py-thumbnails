@@ -14,8 +14,9 @@ from plugin_thumbnails.thumbnails import thumbnails     # imports thumbnails plu
 thumb = thumbnails(db)                                  # instantiate plugin and crete needed table
 thumb.create(db.mytable.img)                            # create thumbnails for mytable img field
 db.mytable.insert(myfield='Char',img=image)             # automatically create thumbnail for img field
+db(db.mytable.id).img_thumbnail                         # get img thumbnail
 db(db.mytable.id).update(img=new_image)                 # automatically update thumbnail
-db(db.mytable).delete()                                 # automatically delete thumbnail
+db(db.mytable.id).delete()                              # automatically delete thumbnail
 
 
 Options:
@@ -32,30 +33,34 @@ class thumbnails():
         self.db = db
         self._init_plugin_thumbnails_db(autodelete)
 
-    def create(self, table_field, size=(175, 175)):
+    def create(self, table_field, size=(175, 175), use_imageops=False):
         self.db[table_field._tablename]._after_insert.append(
-            lambda fields,id: self._after_insert(table_field, fields, id, size))
+            lambda fields,id: self._after_insert(table_field, fields, id, size, use_imageops))
         self.db[table_field._tablename]._after_update.append(
-            lambda queryset,fields: self._after_update(table_field, fields, queryset, size))
+            lambda queryset,fields: self._after_update(table_field, fields, queryset, size, use_imageops))
         self.db[table_field._tablename]._before_delete.append(
             lambda queryset: self._before_delete(table_field, queryset))
         self.db[table_field._tablename][table_field.name+'_thumbnail'] = Field.Virtual(
             lambda row: self._get_thumbnail(table_field, row))
         
-    def _init_plugin_thumbnails_db(self,autodelete):
+    def _init_plugin_thumbnails_db(self, autodelete):
+        """
+        Declare plugin table
+        :param autodelete: if true remove images from hdd when delete fields
+        """
         self.db.define_table('plugin_thumbnails',
                         Field('row_id','integer'),
                         Field('table_name'),
                         Field('field_name'),
                         Field('image_thumbnail','upload', autodelete=autodelete))
 
-    def _after_insert(self, table_field, fields, id, size):
-        self.make_thumbnail(table_field, id, size)
+    def _after_insert(self, table_field, fields, id, size, use_imageops):
+        self.make_thumbnail(table_field, id, size, use_imageops)
         return False
 
-    def _after_update(self, table_field, fields, queryset, size):
+    def _after_update(self, table_field, fields, queryset, size, use_imageops):
         query = queryset.select(self.db[table_field._tablename].id).first()
-        self.make_thumbnail(table_field, query.id, size)
+        self.make_thumbnail(table_field, query.id, size, use_imageops)
         return False
 
     def _before_delete(self, table_field, queryset):
@@ -71,30 +76,42 @@ class thumbnails():
             thumb_file = row[table_field._tablename].image
         return thumb_file
 
-    def make_thumbnail(self, table_field, row_id, size=(175, 175)):
+    def make_thumbnail(self, table_field, row_id, size=(175, 175), use_imageops=False):
+        """
+        Create a thumbnail of an uploaded image and insert it in thumbnail table
+        :param table_field: table field object of type images
+        :param row_id: id of row
+        :param size: thumbnail size (x,y)
+        :param use_imageops: if set true, use ImageOps.fit instead of thumbnail PIL function
+        """
         table = self.db[table_field._tablename]
         try:
             from PIL import Image
+
             row = table(row_id)
             im = Image.open(os.path.join(current.request.folder, 'uploads', row[table_field.name]))
-            im.thumbnail(size, Image.ANTIALIAS)
-            thumbnail = 'thumbnails.tmp_thumbnail_thumb.%s.jpg' % row[table_field.name].split('.')[2]
-            im.save(os.path.join(current.request.folder, 'uploads', thumbnail), 'jpeg')
-            stream = open(os.path.join(current.request.folder, 'uploads', thumbnail), 'rb')
+            if not use_imageops:
+                im.thumbnail(size, Image.ANTIALIAS)
+            else:
+                from PIL import ImageOps
+                im = ImageOps.fit(im, size, Image.ANTIALIAS)
+            thumbnail_tmp_path = 'thumbnails.tmp_thumbnail_thumb.%s.jpg' % row[table_field.name].split('.')[2]
+            im.save(os.path.join(current.request.folder, 'uploads', thumbnail_tmp_path), 'jpeg')
+            stream = open(os.path.join(current.request.folder, 'uploads', thumbnail_tmp_path), 'rb')
 
             img = self.db((self.db.plugin_thumbnails.row_id == row_id) & (self.db.plugin_thumbnails.table_name == table._tablename) & (self.db.plugin_thumbnails.field_name == table_field.name)).select()
             if len(img) > 0:
                 img[0].update_record(image_thumbnail=stream)
             else:
-                self.db.plugin_thumbnails.insert(row_id=row_id,table_name=table._tablename, field_name=table_field.name,image_thumbnail=stream)
+                self.db.plugin_thumbnails.insert(row_id=row_id,table_name=table._tablename, field_name=table_field.name, image_thumbnail=stream)
 
-            os.remove(os.path.join(current.request.folder, 'uploads', thumbnail))
+            os.remove(os.path.join(current.request.folder, 'uploads', thumbnail_tmp_path))
             self.db.commit()
         except:
             pass
         try:
             row = table(row_id)
-            thumbnail = 'thumbnails.tmp_thumbnail_thumb.%s.jpg' % row[table_field.name].split('.')[2]
-            os.remove(os.path.join(current.request.folder, 'uploads', thumbnail))
+            thumbnail_tmp_path = 'thumbnails.tmp_thumbnail_thumb.%s.jpg' % row[table_field.name].split('.')[2]
+            os.remove(os.path.join(current.request.folder, 'uploads', thumbnail_tmp_path))
         except:
             pass
